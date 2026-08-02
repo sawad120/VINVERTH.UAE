@@ -1,0 +1,12 @@
+{
+  "name": "vinverth-eyewear",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Premium VINVERTH eyewear storefront",
+  "scripts": {
+    "start": "npx serve ."
+  },
+  "dependencies": {
+    "@emailjs/browser": "^4.4.1"
+  }
+}
