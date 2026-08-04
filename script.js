@@ -215,19 +215,6 @@
     });
   }
 
-  function initAboutCompanyText() {
-    const caption = select(".about-image__caption");
-    if (!caption || select(".about-image__description", caption)) return;
-    const description = document.createElement("p");
-    description.className = "about-image__description";
-    description.textContent = "KOK International FZE brings the VINVERTH vision to life through considered eyewear, thoughtful design, and everyday comfort.";
-    caption.appendChild(description);
-    const address = document.createElement("p");
-    address.className = "about-image__address";
-    address.textContent = "Sharjah, United Arab Emirates";
-    caption.appendChild(address);
-  }
-
   function initContactEmail() {
     selectAll(".site-footer p, .contact-detail strong").forEach((element) => {
       if (element.textContent.includes("support@vinverth.com")) element.textContent = element.textContent.replace("support@vinverth.com", CONFIG.contactEmail);
@@ -245,19 +232,6 @@
   }
 
   // ---------- Intro and navigation ----------
-  function initIntro() {
-    const intro = select("#intro");
-    if (!intro) return;
-    if (sessionStorage.getItem("vinverth-intro-seen")) {
-      intro.classList.add("is-done");
-      return;
-    }
-    window.setTimeout(() => {
-      intro.classList.add("is-done");
-      sessionStorage.setItem("vinverth-intro-seen", "true");
-    }, 1700);
-  }
-
   function initNavigation() {
     const header = select("#site-header");
     const menu = select("[data-mobile-menu]");
@@ -418,6 +392,8 @@
       const fallback = slide.dataset.theme || themeFallbacks[index] || themeFallbacks[0];
       document.documentElement.style.setProperty("--accent-color", fallback);
       document.documentElement.style.setProperty("--soft-color", `${fallback}42`);
+      const imageSource = slide.dataset.image;
+      if (!imageSource) return;
       const image = new Image();
       image.crossOrigin = "anonymous";
       image.onload = () => {
@@ -431,23 +407,36 @@
           if (red + green + blue > 80) document.documentElement.style.setProperty("--accent-color", `rgb(${red}, ${green}, ${blue})`);
         } catch { /* External image CORS is optional; the slide fallback remains active. */ }
       };
-      image.src = slide.dataset.image || "";
+      image.src = imageSource;
     };
     const showSlide = (index) => {
       activeIndex = (index + slides.length) % slides.length;
       slides.forEach((slide, slideIndex) => slide.classList.toggle("is-active", slideIndex === activeIndex));
       numberButtons.forEach((button, buttonIndex) => button.classList.toggle("is-active", buttonIndex === activeIndex));
       setTheme(slides[activeIndex], activeIndex);
+      slides.forEach((slide, slideIndex) => {
+        const video = select(".hero-slide__video", slide);
+        if (!video) return;
+        if (slideIndex === activeIndex && !document.hidden) {
+          const playback = video.play();
+          playback?.catch(() => {});
+        } else video.pause();
+      });
     };
     const restartTimer = () => {
       window.clearInterval(timer);
-      timer = window.setInterval(() => showSlide(activeIndex + 1), 6200);
+      if (activeIndex === 0) return;
+      timer = window.setInterval(() => {
+        showSlide(activeIndex + 1);
+        if (activeIndex === 0) restartTimer();
+      }, 6200);
     };
     numberButtons.forEach((button) => button.addEventListener("click", () => { showSlide(Number(button.dataset.slide)); restartTimer(); }));
     select("[data-hero-prev]")?.addEventListener("click", () => { showSlide(activeIndex - 1); restartTimer(); });
     select("[data-hero-next]")?.addEventListener("click", () => { showSlide(activeIndex + 1); restartTimer(); });
     hero.addEventListener("mouseenter", () => window.clearInterval(timer));
     hero.addEventListener("mouseleave", restartTimer);
+    document.addEventListener("visibilitychange", () => showSlide(activeIndex));
     document.addEventListener("keydown", (event) => {
       if (event.key === "ArrowLeft") showSlide(activeIndex - 1);
       if (event.key === "ArrowRight") showSlide(activeIndex + 1);
@@ -641,10 +630,8 @@
   // ---------- Boot ----------
   document.addEventListener("DOMContentLoaded", () => {
     initBranding();
-    initAboutCompanyText();
     initContactEmail();
     initFooterSocials();
-    initIntro();
     initNavigation();
     initContactLinks();
     initWishlistNavigation();

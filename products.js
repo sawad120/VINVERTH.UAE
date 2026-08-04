@@ -1,7 +1,7 @@
 /* =====================================
    VINVERTH PRODUCT CATALOGUE
    Edit the image URLs, names, and prices here.
-   The catalogue intentionally exposes exactly 100 products.
+   The catalogue exposes 97 products after excluding every VN-1095 item.
    ===================================== */
 (function createVinverthCatalogue() {
   const menImages = [
@@ -149,9 +149,11 @@
     };
   });
 
+  const availableProducts = products.filter((product) => product.name !== "VN-1095");
+
   window.VinverthProducts = {
-    products,
-    featured: products.slice(0, 12),
+    products: availableProducts,
+    featured: availableProducts.slice(0, 12),
     imagePool
   };
 })();
