@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" /><meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="robots" content="noindex,nofollow" /><title>VINVERTH Admin</title>
+  <link rel="stylesheet" href="../style.css" /><link rel="stylesheet" href="/admin/admin.css" />
+</head>
+<body class="admin-body">
+  <main class="admin-shell">
+    <section class="admin-login" data-login>
+      <p class="eyebrow">VINVERTH</p><h1>Admin access</h1><p>Sign in with your administrator account.</p>
+      <form data-login-form><label>Email<input name="email" type="email" autocomplete="email" required /></label><label>Password<input name="password" type="password" autocomplete="current-password" required /></label><button class="button button--dark" type="submit">Sign in <span>→</span></button><p data-login-message role="status"></p></form>
+    </section>
+    <section class="admin-mfa" data-mfa hidden>
+      <p class="eyebrow">Secure your account</p><h1>Two-factor verification</h1><div data-mfa-content></div><p data-mfa-message role="status"></p>
+    </section>
+    <section class="admin-app" data-app hidden>
+      <header class="admin-header"><div><p class="eyebrow">VINVERTH</p><h1>Store administration</h1></div><div><span data-admin-email></span><button class="button" data-sign-out>Sign out</button></div></header>
+      <nav class="admin-tabs" aria-label="Admin sections"><button data-tab="dashboard" class="is-active">Dashboard</button><button data-tab="products">Products</button><button data-tab="categories">Categories</button><button data-tab="messages">Messages</button><button data-tab="subscribers">Subscribers</button><button data-tab="settings">Settings</button><button data-tab="audit">Audit log</button></nav>
+      <p class="admin-notice" data-notice role="status"></p>
+      <section data-panel="dashboard"><div class="admin-stats" data-stats></div></section>
+      <section data-panel="products" hidden><div class="admin-panel-head"><h2>Products</h2><button class="button button--dark" data-new-product>New product <span>+</span></button></div><div class="admin-grid" data-product-list></div><form class="admin-form" data-product-form hidden></form></section>
+      <section data-panel="categories" hidden><div class="admin-panel-head"><h2>Categories</h2></div><form class="admin-form admin-inline" data-category-form><label>Name<input name="name" required /></label><label>Slug<input name="slug" required /></label><button class="button button--dark">Add category</button></form><div class="admin-grid" data-category-list></div></section>
+      <section data-panel="messages" hidden><h2>Contact messages</h2><div class="admin-grid" data-message-list></div></section>
+      <section data-panel="subscribers" hidden><h2>Newsletter subscribers</h2><div class="admin-grid" data-subscriber-list></div></section>
+      <section data-panel="settings" hidden><h2>Site settings</h2><form class="admin-form" data-settings-form></form></section>
+      <section data-panel="audit" hidden><h2>Audit log</h2><div class="admin-grid" data-audit-list></div></section>
+    </section>
+  </main>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.112.3"></script><script src="../supabase-config.js"></script><script src="../supabase-client.js"></script><script src="../products.js"></script><script src="/admin/admin.js"></script>
+</body>
+</html>
