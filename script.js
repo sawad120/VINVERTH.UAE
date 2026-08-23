@@ -20,11 +20,24 @@
     storageKey: "vinverth-cart"
   };
 
-  const products = window.VinverthProducts?.products || [];
+  let products = [];
   const currency = (value) => new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(value);
   const select = (selector, scope = document) => scope.querySelector(selector);
   const selectAll = (selector, scope = document) => [...scope.querySelectorAll(selector)];
   const escapeHtml = (value) => String(value).replace(/[&<>'"]/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "'": "&#39;", '"': "&quot;" }[character]));
+
+  async function hydrateStorefrontData() {
+    const api = window.VinverthCatalogueApi;
+    if (!api) return;
+    const [remoteProducts, settings] = await Promise.all([api.loadProducts(), api.loadSettings()]);
+    products = Array.isArray(remoteProducts) ? remoteProducts : [];
+    if (settings) {
+      CONFIG.whatsappNumber = settings.whatsapp_number || CONFIG.whatsappNumber;
+      CONFIG.contactEmail = settings.support_email || CONFIG.contactEmail;
+      CONFIG.instagramUrl = settings.instagram_url || CONFIG.instagramUrl;
+      CONFIG.logoUrl = settings.logo_url || CONFIG.logoUrl;
+    }
+  }
 
   // ---------- Shared utility functions ----------
   function showToast(message) {
@@ -49,8 +62,16 @@
   }
 
   function getProduct(id) {
-    const normalizedId = String(id || "");
-    return products.find((product) => product.id === normalizedId || product.name === normalizedId);
+    const normalizedId = String(id || "").toLowerCase().trim();
+    if (!normalizedId) return null;
+    return products.find(
+      (product) =>
+        String(product.id || "").toLowerCase() === normalizedId ||
+        String(product.rawId || "").toLowerCase() === normalizedId ||
+        String(product.sku || "").toLowerCase() === normalizedId ||
+        String(product.slug || "").toLowerCase() === normalizedId ||
+        String(product.name || "").toLowerCase() === normalizedId
+    ) || null;
   }
 
   function getCart() {
@@ -363,20 +384,45 @@
 
   // ---------- Soft scroll reveal ----------
   function initScrollReveal() {
-    const revealTargets = selectAll(".section-pad, .collections, .story, .contact-strip, .blog-strip, .newsletter, .site-footer, .page-hero, .about-intro, .about-image, .values, .contact-section");
-    revealTargets.forEach((element) => element.classList.add("reveal"));
-    if (!("IntersectionObserver" in window)) {
-      revealTargets.forEach((element) => element.classList.add("is-visible"));
-      return;
-    }
-    const observer = new IntersectionObserver((entries, currentObserver) => {
+    const revealSelectors = [
+      ".section-pad",
+      ".blog-grid article",
+      ".review-card",
+      ".product-card",
+      ".collection-panel",
+      ".contact-strip__inner",
+      ".newsletter__inner",
+      ".section-head",
+      ".values-grid article",
+      ".about-intro__grid",
+      ".product-detail",
+      ".breadcrumbs",
+      ".empty-state"
+    ];
+    const elements = new Set();
+    let observer;
+    const reveal = (element) => {
+      if (elements.has(element)) return;
+      elements.add(element);
+      element.classList.add("reveal");
+      if (element.parentElement) {
+        const siblings = [...element.parentElement.children].filter((el) => el.classList.contains("reveal"));
+        const index = siblings.indexOf(element);
+        if (index >= 0) element.style.setProperty("--reveal-index", String(index));
+      }
+      observer?.observe(element);
+    };
+    const scan = (root = document) => revealSelectors.forEach((selector) => selectAll(selector, root).forEach(reveal));
+    observer = new IntersectionObserver((entries, currentObserver) => {
       entries.forEach((entry) => {
         if (!entry.isIntersecting) return;
         entry.target.classList.add("is-visible");
         currentObserver.unobserve(entry.target);
       });
-    }, { threshold: 0.12 });
-    revealTargets.forEach((element) => observer.observe(element));
+    }, { threshold: 0.08, rootMargin: "0px 0px -40px" });
+    scan();
+    const mutationObserver = new MutationObserver(() => scan());
+    mutationObserver.observe(document.body, { childList: true, subtree: true });
   }
 
   // ---------- Homepage hero ----------
@@ -414,22 +460,14 @@
       slides.forEach((slide, slideIndex) => slide.classList.toggle("is-active", slideIndex === activeIndex));
       numberButtons.forEach((button, buttonIndex) => button.classList.toggle("is-active", buttonIndex === activeIndex));
       setTheme(slides[activeIndex], activeIndex);
-      slides.forEach((slide, slideIndex) => {
+      slides.forEach((slide) => {
         const video = select(".hero-slide__video", slide);
         if (!video) return;
-        if (slideIndex === activeIndex && !document.hidden) {
-          const playback = video.play();
-          playback?.catch(() => {});
-        } else video.pause();
+        video.pause();
       });
     };
     const restartTimer = () => {
       window.clearInterval(timer);
-      if (activeIndex === 0) return;
-      timer = window.setInterval(() => {
-        showSlide(activeIndex + 1);
-        if (activeIndex === 0) restartTimer();
-      }, 6200);
     };
     numberButtons.forEach((button) => button.addEventListener("click", () => { showSlide(Number(button.dataset.slide)); restartTimer(); }));
     select("[data-hero-prev]")?.addEventListener("click", () => { showSlide(activeIndex - 1); restartTimer(); });
@@ -448,11 +486,12 @@
   // ---------- Product rendering ----------
   function productCard(product) {
     const isWishlisted = getWishlist().includes(product.id);
-    const inCart = getCart().some((c) => c.id === product.id);
+    const inCart = getCart().some((c) => c.id === product.id || c.id === product.sku);
     const addButton = inCart
       ? `<button class="button is-added" disabled aria-pressed="true">Added <span>✓</span></button>`
-      : `<button class="button button--dark" type="button" data-add-to-cart="${product.id}">Add to bag <span>+</span></button>`;
-    return `<article class="product-card"><a class="product-card__image" href="product.html?id=${encodeURIComponent(product.id)}"><img src="${escapeHtml(product.image)}" alt="${escapeHtml(product.name)}" loading="lazy" decoding="async" /><span class="product-card__badge" ${product.badge ? "" : "hidden"}>${escapeHtml(product.badge)}</span></a><button class="product-card__wish${isWishlisted ? " is-wishlisted" : ""}" type="button" data-wishlist="${product.id}" aria-label="${isWishlisted ? "Remove" : "Add"} ${escapeHtml(product.name)} ${isWishlisted ? "from" : "to"} wishlist"><span class="heart-icon" aria-hidden="true">${isWishlisted ? "♥" : "♡"}</span></button><div class="product-card__body"><a href="product.html?id=${encodeURIComponent(product.id)}"><h3>${escapeHtml(product.name)}</h3></a><p>${escapeHtml(product.category)} · ${escapeHtml(product.gender)}</p><div class="product-card__price"><span>${currency(product.price)}</span>${product.oldPrice ? `<del class="product-card__old">${currency(product.oldPrice)}</del>` : ""}</div><div class="product-card__actions">${addButton}<button class="button button--outline" type="button" data-buy-now="${product.id}">Buy <span>→</span></button></div></div></article>`;
+      : `<button class="button button--dark" type="button" data-add-to-cart="${escapeHtml(product.id)}">Add to bag <span>+</span></button>`;
+    const linkParam = encodeURIComponent(product.id || product.slug || product.sku || product.rawId);
+    return `<article class="product-card"><a class="product-card__image" href="product.html?id=${linkParam}"><img src="${escapeHtml(product.image)}" alt="${escapeHtml(product.name)}" loading="lazy" decoding="async" /><span class="product-card__badge" ${product.badge ? "" : "hidden"}>${escapeHtml(product.badge)}</span></a><button class="product-card__wish${isWishlisted ? " is-wishlisted" : ""}" type="button" data-wishlist="${escapeHtml(product.id)}" aria-label="${isWishlisted ? "Remove" : "Add"} ${escapeHtml(product.name)} ${isWishlisted ? "from" : "to"} wishlist"><span class="heart-icon" aria-hidden="true">${isWishlisted ? "♥" : "♡"}</span></button><div class="product-card__body"><a href="product.html?id=${linkParam}"><h3>${escapeHtml(product.name)}</h3></a><p>${escapeHtml(product.category)} · ${escapeHtml(product.gender)}</p><div class="product-card__price"><span>${currency(product.price)}</span>${product.oldPrice ? `<del class="product-card__old">${currency(product.oldPrice)}</del>` : ""}</div><div class="product-card__actions">${addButton}<button class="button button--outline" type="button" data-buy-now="${escapeHtml(product.id)}">Buy <span>→</span></button></div></div></article>`;
   }
 
   function renderProducts(container, collection) {
@@ -486,7 +525,8 @@
   }
 
   function initHome() {
-    renderProducts(select("#home-products"), window.VinverthProducts?.featured || []);
+    const featuredProducts = products.filter((product) => product.isFeatured);
+    renderProducts(select("#home-products"), (featuredProducts.length ? featuredProducts : products).slice(0, 12));
     const reviews = [
       { quote: "Best quality and super comfortable. Exactly what I was looking for!", name: "Arjun P.", city: "Bengaluru" },
       { quote: "Absolutely love the design and fit. Perfect for everyday use.", name: "Neha S.", city: "Mumbai" },
@@ -535,27 +575,63 @@
   }
 
   // ---------- Product detail ----------
-  function initProductDetail() {
+  function renderEmptyProductState(container) {
+    document.title = "Frame not found — VINVERTH Eyewear";
+    container.innerHTML = `<div class="empty-state"><h1>Frame not found.</h1><p>That product may have moved or is no longer available.</p><a class="button button--dark" href="shop.html">Browse the collection <span>→</span></a></div>`;
+  }
+
+  async function initProductDetail() {
     const container = select("[data-product-detail]");
     if (!container) return;
-    const requestedId = new URLSearchParams(window.location.search).get("id");
-    const product = getProduct(requestedId) || (!requestedId ? products[0] : null);
+    const params = new URLSearchParams(window.location.search);
+    let requestedId = (params.get("id") || params.get("slug") || params.get("sku") || params.get("product") || params.get("name") || "").trim();
+    if (!requestedId) {
+      let availableProducts = products;
+      if (!availableProducts.length && window.VinverthCatalogueApi?.loadProducts) {
+        availableProducts = await window.VinverthCatalogueApi.loadProducts();
+      }
+      if (availableProducts.length > 0) {
+        requestedId = availableProducts[0].id;
+      }
+    }
+    if (!requestedId) {
+      renderEmptyProductState(container);
+      return;
+    }
+    let product = getProduct(requestedId);
+    if (!product && window.VinverthCatalogueApi?.loadProductById) {
+      product = await window.VinverthCatalogueApi.loadProductById(requestedId);
+      if (product && !products.some((p) => p.id === product.id)) {
+        products.push(product);
+      }
+    }
     if (!product) {
-      document.title = "Frame not found — VINVERTH Eyewear";
-      container.innerHTML = `<div class="empty-state"><h1>Frame not found.</h1><p>That product may have moved or is no longer available.</p><a class="button button--dark" href="shop.html">Browse the collection <span>→</span></a></div>`;
+      renderEmptyProductState(container);
       return;
     }
     document.title = `${product.name} — VINVERTH Eyewear`;
-    select("meta[name='description']")?.setAttribute("content", `${product.name}: ${product.description} Shop VINVERTH eyewear online.`);
+    select("meta[name='description']")?.setAttribute("content", `${product.name}: ${product.description || "Premium VINVERTH eyewear frame."} Shop online.`);
+    initSeo();
     const breadcrumb = select("[data-detail-breadcrumb]");
     if (breadcrumb) breadcrumb.textContent = product.name;
-    const inCart = getCart().some((c) => c.id === product.id);
+    const inCart = getCart().some((c) => c.id === product.id || c.id === product.sku);
     const detailAdd = inCart
-      ? `<button class="button is-added" disabled data-detail-cart="${product.id}">Added <span>✓</span></button>`
-      : `<button class="button button--dark" type="button" data-detail-cart="${product.id}">Add to bag <span>+</span></button>`;
-    container.innerHTML = `<div class="product-detail__media"><img src="${escapeHtml(product.image)}" alt="${escapeHtml(product.name)}" loading="eager" decoding="async" /></div><div class="product-detail__content"><p class="eyebrow">${escapeHtml(product.category)} · ${escapeHtml(product.gender)}</p><h1>${escapeHtml(product.name)}</h1><div class="product-detail__price"><span>${currency(product.price)}</span>${product.oldPrice ? `<del>${currency(product.oldPrice)}</del>` : ""}</div><p class="product-detail__description">${escapeHtml(product.description)}</p><div class="product-detail__buttons"><div class="quantity"><button type="button" data-qty="decrease" aria-label="Decrease quantity">−</button><input value="1" min="1" max="10" type="number" data-detail-quantity aria-label="Quantity" /><button type="button" data-qty="increase" aria-label="Increase quantity">+</button></div>${detailAdd}<button class="button button--blue" type="button" data-detail-buy="${product.id}">Buy on WhatsApp <span>→</span></button></div></div>`;
-    const related = products.filter((item) => item.id !== product.id && item.category === product.category).slice(0, 4);
-    renderProducts(select("#related-products"), related);
+      ? `<button class="button is-added" disabled data-detail-cart="${escapeHtml(product.id)}">Added <span>✓</span></button>`
+      : `<button class="button button--dark" type="button" data-detail-cart="${escapeHtml(product.id)}">Add to bag <span>+</span></button>`;
+    const specsHtml = (product.material || product.uv || product.size || product.stock)
+      ? `<div class="detail-features">
+          ${product.material ? `<div><strong>Material</strong><span>${escapeHtml(product.material)}</span></div>` : ""}
+          ${product.uv ? `<div><strong>UV Protection</strong><span>${escapeHtml(product.uv)}</span></div>` : ""}
+          ${product.size ? `<div><strong>Size</strong><span>${escapeHtml(product.size)}</span></div>` : ""}
+          ${product.stock ? `<div><strong>Availability</strong><span>${escapeHtml(product.stock)}</span></div>` : ""}
+        </div>`
+      : "";
+    container.innerHTML = `<div class="product-detail__media"><img src="${escapeHtml(product.image)}" alt="${escapeHtml(product.name)}" loading="eager" decoding="async" /></div><div class="product-detail__content"><p class="eyebrow">${escapeHtml(product.category)} · ${escapeHtml(product.gender)}</p><h1>${escapeHtml(product.name)}</h1><div class="product-detail__price"><span>${currency(product.price)}</span>${product.oldPrice ? `<del>${currency(product.oldPrice)}</del>` : ""}</div><p class="product-detail__description">${escapeHtml(product.description)}</p>${specsHtml}<div class="product-detail__buttons"><div class="quantity"><button type="button" data-qty="decrease" aria-label="Decrease quantity">−</button><input value="1" min="1" max="10" type="number" data-detail-quantity aria-label="Quantity" /><button type="button" data-qty="increase" aria-label="Increase quantity">+</button></div>${detailAdd}<button class="button button--blue" type="button" data-detail-buy="${escapeHtml(product.id)}">Buy on WhatsApp <span>→</span></button></div></div>`;
+    const relatedContainer = select("#related-products");
+    if (relatedContainer) {
+      const related = products.filter((item) => item.id !== product.id && item.category === product.category).slice(0, 4);
+      renderProducts(relatedContainer, related.length ? related : products.filter((item) => item.id !== product.id).slice(0, 4));
+    }
   }
 
   // ---------- EmailJS forms ----------
@@ -628,7 +704,8 @@
   }
 
   // ---------- Boot ----------
-  document.addEventListener("DOMContentLoaded", () => {
+  document.addEventListener("DOMContentLoaded", async () => {
+    await hydrateStorefrontData();
     initBranding();
     initContactEmail();
     initFooterSocials();
@@ -639,7 +716,7 @@
     initHero();
     initHome();
     initShop();
-    initProductDetail();
+    await initProductDetail();
     initSeo();
     renderWishlist();
     initForms();
