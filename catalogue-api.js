@@ -35,6 +35,9 @@
 
   function mapProductRecord(product, resolvedImageUrl) {
     const id = product.sku || product.slug || product.id;
+    const rawPrice = Number(product.price);
+    const rawOldPrice = product.compare_at_price == null ? null : Number(product.compare_at_price);
+
     return {
       id: id,
       rawId: product.id,
@@ -44,8 +47,10 @@
       category: product.product_categories?.name || "General",
       gender: product.gender || "Unisex",
       image: resolvedImageUrl,
-      price: Number(product.price),
-      oldPrice: product.compare_at_price == null ? null : Number(product.compare_at_price),
+      price: rawPrice,
+      formattedPrice: `$${rawPrice.toFixed(2)}`,
+      oldPrice: rawOldPrice,
+      formattedOldPrice: rawOldPrice !== null ? `$${rawOldPrice.toFixed(2)}` : null,
       badge: product.badge || "",
       isFeatured: Boolean(product.is_featured),
       description: product.description || "",
@@ -85,26 +90,32 @@
       }
     }
 
-    const fallbackList = (window.VinverthProducts?.products || []).map((p) => ({
-      id: p.id,
-      rawId: p.id,
-      sku: p.id,
-      slug: p.id.toLowerCase(),
-      name: p.name,
-      category: p.category || "General",
-      gender: p.gender || "Unisex",
-      image: p.image || imagePlaceholder,
-      price: Number(p.price),
-      oldPrice: p.oldPrice ? Number(p.oldPrice) : null,
-      badge: p.badge || "",
-      isFeatured: Boolean(p.isFeatured),
-      description: p.description || "",
-      uv: p.uv || "",
-      material: p.material || "",
-      size: p.size || "",
-      createdAt: p.createdAt || 0,
-      stock: p.stock || "In stock"
-    }));
+    const fallbackList = (window.VinverthProducts?.products || []).map((p) => {
+      const pPrice = Number(p.price);
+      const pOldPrice = p.oldPrice ? Number(p.oldPrice) : null;
+      return {
+        id: p.id,
+        rawId: p.id,
+        sku: p.id,
+        slug: p.id.toLowerCase(),
+        name: p.name,
+        category: p.category || "General",
+        gender: p.gender || "Unisex",
+        image: p.image || imagePlaceholder,
+        price: pPrice,
+        formattedPrice: `$${pPrice.toFixed(2)}`,
+        oldPrice: pOldPrice,
+        formattedOldPrice: pOldPrice !== null ? `$${pOldPrice.toFixed(2)}` : null,
+        badge: p.badge || "",
+        isFeatured: Boolean(p.isFeatured),
+        description: p.description || "",
+        uv: p.uv || "",
+        material: p.material || "",
+        size: p.size || "",
+        createdAt: p.createdAt || 0,
+        stock: p.stock || "In stock"
+      };
+    });
 
     if (supabaseProducts.length > 0) {
       const existingIds = new Set(supabaseProducts.map((p) => String(p.id).toLowerCase()));
@@ -121,7 +132,6 @@
 
     const normalizedTerm = queryTerm.toLowerCase();
 
-    // 1. Check direct Supabase query if client is available
     const client = getClient();
     if (client) {
       try {
@@ -176,7 +186,6 @@
       }
     }
 
-    // 2. Fallback: Search in full combined catalogue list
     const allProducts = await loadProducts();
     return allProducts.find(
       (p) =>
