@@ -71,7 +71,22 @@
 
   function renderDashboard(messages, subscribers) { const drafts = state.products.filter((p) => p.status === "draft").length; const low = state.products.filter((p) => p.stock_quantity <= p.low_stock_threshold).length; $("[data-stats]").innerHTML = [["Products", state.products.length], ["Drafts", drafts], ["Low stock", low], ["New messages", messages.filter((m) => m.status === "new").length], ["Subscribers", subscribers.length]].map(([label, value]) => `<article class="admin-stat"><span>${label}</span><strong>${value}</strong></article>`).join(""); }
 
-  async function renderProducts() { const items = await Promise.all(state.products.map(async (p) => { const image = p.product_images?.find((item) => item.is_primary) || p.product_images?.[0]; let imageUrl = image?.external_url || ""; const storagePath = String(image?.storage_path || "").trim().replace(/^\/+/, "").replace(/^product-media\//, ""); if (!imageUrl && storagePath && !/^https?:\/\//i.test(storagePath)) { const signed = await client.storage.from("product-media").createSignedUrl(storagePath, 3600); imageUrl = signed.data?.signedUrl || imagePlaceholder; if (signed.error) console.warn(`Could not resolve admin product image for ${p.id} at ${storagePath}: ${signed.error.message}`); } imageUrl ||= imagePlaceholder; return `<article class="admin-card"><div class="admin-card__main"><img src="${escape(imageUrl)}" alt="" /><div><h3>${escape(p.name)}</h3><p>${escape(p.sku)} · ${escape(p.status)} · ${p.currency} ${p.price} · ${p.stock_quantity} in stock</p></div></div><div><button data-edit-product="${p.id}">Edit</button><button data-archive-product="${p.id}">Archive</button><button data-delete-product="${p.id}">Delete</button></div></article>`; })); $("[data-product-list]").innerHTML = items.join("") || "<p>No products in Supabase yet.</p>"; }
+  async function renderProducts() { 
+    const items = await Promise.all(state.products.map(async (p) => { 
+      const image = p.product_images?.find((item) => item.is_primary) || p.product_images?.[0]; 
+      let imageUrl = image?.external_url || ""; 
+      const storagePath = String(image?.storage_path || "").trim().replace(/^\/+/, "").replace(/^product-media\//, ""); 
+      
+      if (!imageUrl && storagePath && !/^https?:\/\//i.test(storagePath)) { 
+        const { data: publicUrlData } = client.storage.from("product-media").getPublicUrl(storagePath);
+        imageUrl = publicUrlData?.publicUrl || imagePlaceholder;
+      } 
+      imageUrl ||= imagePlaceholder; 
+      
+      return `<article class="admin-card"><div class="admin-card__main"><img src="${escape(imageUrl)}" alt="" /><div><h3>${escape(p.name)}</h3><p>${escape(p.sku)} · ${escape(p.status)} · ${p.currency} ${p.price} · ${p.stock_quantity} in stock</p></div></div><div><button data-edit-product="${p.id}">Edit</button><button data-archive-product="${p.id}">Archive</button><button data-delete-product="${p.id}">Delete</button></div></article>`; 
+    })); 
+    $("[data-product-list]").innerHTML = items.join("") || "<p>No products in Supabase yet.</p>"; 
+  }
 
   function renderCategories() { $("[data-category-list]").innerHTML = (state.categories.length ? state.categories : ALLOWED_CATEGORIES.map((name) => ({ name, slug: slugify(name), is_active: true }))).map((c) => `<article class="admin-card"><div><h3>${escape(c.name)}</h3><p>${escape(c.slug)} · ${c.is_active !== false ? "Active" : "Hidden"}</p></div>${c.id ? `<button data-toggle-category="${c.id}">${c.is_active ? "Hide" : "Activate"}</button>` : ""}</article>`).join(""); }
 
@@ -127,12 +142,16 @@
       if (upload.error) return notice(`Image upload failed: ${upload.error.message}`, true); 
       const storagePath = String(upload.data?.path || requestedPath).replace(/^\/+/, "").replace(/^product-media\//, ""); 
       
+      // Get Public URL so it works on ALL devices instantly without login/signed token issues
+      const { data: publicUrlData } = client.storage.from("product-media").getPublicUrl(storagePath);
+      const publicUrl = publicUrlData.publicUrl;
+
       await client.from("product_images").update({ is_primary: false }).eq("product_id", product.id); 
       
       const imageResult = await client.from("product_images").insert({ 
         product_id: product.id, 
-        storage_path: storagePath, 
-        external_url: null, // കൺസ്ട്രെയ്ൻ്റ് എറർ വരാതിരിക്കാൻ ഇത് നിർബന്ധമായും null ആക്കിയിരിക്കുന്നു
+        storage_path: null, // Constraint safe
+        external_url: publicUrl, // Save Public URL directly here!
         alt_text: product.name, 
         is_primary: true 
       }); 
@@ -202,7 +221,7 @@
 
   document.addEventListener("submit", async (event) => { if (event.target.matches("[data-login-form]")) { event.preventDefault(); const d = new FormData(event.target); const { error } = await client.auth.signInWithPassword({ email: d.get("email"), password: d.get("password") }); if (error) $("[data-login-message]").textContent = error.message; else gate(); } if (event.target.matches("[data-product-form]")) saveProduct(event); if (event.target.matches("[data-category-form]")) { event.preventDefault(); const d = new FormData(event.target); const { error } = await client.from("product_categories").insert({ name: d.get("name"), slug: d.get("slug") }); if (error) notice(error.message, true); else { event.target.reset(); refreshAll(); } } if (event.target.matches("[data-settings-form]")) { event.preventDefault(); const d = Object.fromEntries(new FormData(event.target)); const { error } = await client.from("site_settings").update(d).eq("id", 1); notice(error ? error.message : "Settings saved.", !!error); if (!error) refreshAll(); } });
 
-  document.addEventListener("click", async (event) => { const tab = event.target.closest("[data-tab]"); if (tab) { document.querySelectorAll("[data-tab]").forEach((b) => b.classList.toggle("is-active", b === tab)); document.querySelectorAll("[data-panel]").forEach((p) => p.hidden = p.dataset.panel !== tab.dataset.tab); } if (event.target.matches("[data-sign-out]")) { await client.auth.signOut(); show("login"); } if (event.target.matches("[data-import-catalogue]")) importFallback(); if (event.target.matches("[data-new-product]")) { const form = $("[data-product-form]"); form.innerHTML = productForm(); form.hidden = false; } const edit = event.target.closest("[data-edit-product]"); if (edit) { const form = $("[data-product-form]"); form.innerHTML = productForm(state.products.find((p) => p.id === edit.dataset.editProduct)); form.hidden = false; } if (event.target.matches("[data-cancel-product]")) $("[data-product-form]").hidden = true; const archive = event.target.closest("[data-archive-product]"); if (archive) { const { error } = await client.from("products").update({ status: "archived" }).eq("id", archive.dataset.archiveProduct); if (error) notice(error.message, true); else { notice("Product archived."); refreshAll(); } } const remove = event.target.closest("[data-delete-product]"); if (remove) { await deleteProduct(remove.dataset.deleteProduct); } const category = event.target.closest("[data-toggle-category]"); if (category) { const item = state.categories.find((p) => p.id === category.dataset.toggleCategory); const { error } = await client.product_categories.update({ is_active: !item.is_active }).eq("id", item.id); if (error) notice(error.message, true); else refreshAll(); } });
+  document.addEventListener("click", async (event) => { const tab = event.target.closest("[data-tab]"); if (tab) { document.querySelectorAll("[data-tab]").forEach((b) => b.classList.toggle("is-active", b === tab)); document.querySelectorAll("[data-panel]").forEach((p) => p.hidden = p.dataset.panel !== tab.dataset.tab); } if (event.target.matches("[data-sign-out]")) { await client.auth.signOut(); show("login"); } if (event.target.matches("[data-import-catalogue]")) importFallback(); if (event.target.matches("[data-new-product]")) { const form = $("[data-product-form]"); form.innerHTML = productForm(); form.hidden = false; } const edit = event.target.closest("[data-edit-product]"); if (edit) { const form = $("[data-product-form]"); form.innerHTML = productForm(state.products.find((p) => p.id === edit.dataset.editProduct)); form.hidden = false; } if (event.target.matches("[data-cancel-product]")) $("[data-product-form]").hidden = true; const archive = event.target.closest("[data-archive-product]"); if (archive) { const { error } = await client.from("products").update({ status: "archived" }).eq("id", archive.dataset.archiveProduct); if (error) notice(error.message, true); else { notice("Product archived."); refreshAll(); } } const remove = event.target.closest("[data-delete-product]"); if (remove) { await deleteProduct(remove.dataset.deleteProduct); } const category = event.target.closest("[data-toggle-category]"); if (category) { const item = state.categories.find((p) => p.id === category.dataset.toggleCategory); const { error } = await client.from("product_categories").update({ is_active: !item.is_active }).eq("id", item.id); if (error) notice(error.message, true); else refreshAll(); } });
 
   document.addEventListener("change", async (event) => { if (event.target.matches("[name='image_source']")) { const form = event.target.form; const useUrl = event.target.value === "url"; const urlField = $("[data-image-url]", form); const fileField = $("[data-image-file]", form); urlField.hidden = !useUrl; fileField.hidden = useUrl; $("[name='external_url']", form).disabled = !useUrl; $("[name='image_file']", form).disabled = useUrl; } if (event.target.matches("[data-message-status]")) { await client.from("contact_messages").update({ status: event.target.value }).eq("id", event.target.dataset.messageStatus); refreshAll(); } if (event.target.matches("[data-subscriber-status]")) { await client.from("newsletter_subscribers").update({ status: event.target.value }).eq("id", event.target.dataset.subscriberStatus); refreshAll(); } });
 
