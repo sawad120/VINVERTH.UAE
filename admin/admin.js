@@ -114,8 +114,34 @@
     const payload = { name, price, gender, description, stock_quantity: stockQuantity, status: "published", is_featured: false, category_id: categoryId, sku: id ? undefined : `ADMIN-${crypto.randomUUID()}`, slug: id ? undefined : `admin-${crypto.randomUUID()}` };
     Object.keys(payload).forEach((key) => payload[key] === undefined && delete payload[key]);
     const result = id ? await client.from("products").update(payload).eq("id", id).select() : await client.from("products").insert(payload).select().single(); if (result.error) return notice(result.error.message, true); if (id && !result.data?.length) return notice("Product was not found or could not be updated.", true); const product = id ? result.data[0] : result.data;
-    if (externalUrl) { await client.from("product_images").update({ is_primary: false }).eq("product_id", product.id); const imageResult = await client.from("product_images").insert({ product_id: product.id, external_url: externalUrl, alt_text: product.name, is_primary: true }); if (imageResult.error) return notice(imageResult.error.message, true); }
-    if (file?.size) { const requestedPath = `products/${product.id}/${crypto.randomUUID()}-${file.name.replace(/[^a-zA-Z0-9._-]/g, "-")}`; const upload = await client.storage.from("product-media").upload(requestedPath, file, { upsert: false, contentType: file.type, cacheControl: "3600" }); if (upload.error) return notice(`Image upload failed: ${upload.error.message}`, true); const storagePath = String(upload.data?.path || requestedPath).replace(/^\/+/, "").replace(/^product-media\//, ""); console.log("Uploaded product image path:", { productId: product.id, bucket: "product-media", requestedPath, storagePath }); await client.from("product_images").update({ is_primary: false }).eq("product_id", product.id); const imageResult = await client.from("product_images").insert({ product_id: product.id, storage_path: storagePath, alt_text: product.name, is_primary: true }); if (imageResult.error) { await client.storage.from("product-media").remove([storagePath]); return notice(`Image record failed: ${imageResult.error.message}`, true); } console.log("Saved product image record:", { productId: product.id, storagePath }); }
+    
+    if (externalUrl) { 
+      await client.from("product_images").update({ is_primary: false }).eq("product_id", product.id); 
+      const imageResult = await client.from("product_images").insert({ product_id: product.id, external_url: externalUrl, storage_path: null, alt_text: product.name, is_primary: true }); 
+      if (imageResult.error) return notice(imageResult.error.message, true); 
+    }
+    
+    if (file?.size) { 
+      const requestedPath = `products/${product.id}/${crypto.randomUUID()}-${file.name.replace(/[^a-zA-Z0-9._-]/g, "-")}`; 
+      const upload = await client.storage.from("product-media").upload(requestedPath, file, { upsert: false, contentType: file.type, cacheControl: "3600" }); 
+      if (upload.error) return notice(`Image upload failed: ${upload.error.message}`, true); 
+      const storagePath = String(upload.data?.path || requestedPath).replace(/^\/+/, "").replace(/^product-media\//, ""); 
+      
+      await client.from("product_images").update({ is_primary: false }).eq("product_id", product.id); 
+      
+      const imageResult = await client.from("product_images").insert({ 
+        product_id: product.id, 
+        storage_path: storagePath, 
+        external_url: null, // കൺസ്ട്രെയ്ൻ്റ് എറർ വരാതിരിക്കാൻ ഇത് നിർബന്ധമായും null ആക്കിയിരിക്കുന്നു
+        alt_text: product.name, 
+        is_primary: true 
+      }); 
+      
+      if (imageResult.error) { 
+        await client.storage.from("product-media").remove([storagePath]); 
+        return notice(`Image record failed: ${imageResult.error.message}`, true); 
+      } 
+    }
     $("[data-product-form]").hidden = true; notice("Product saved."); refreshAll();
   }
 
@@ -125,7 +151,6 @@
     try {
       notice("Deleting product...");
 
-      // Clean up storage media files first
       const targetProduct = state.products.find((p) => p.id === productId);
       if (targetProduct?.product_images?.length) {
         const storagePaths = targetProduct.product_images
@@ -140,7 +165,6 @@
         }
       }
 
-      // Delete from Supabase — use .select() so PostgREST confirms the row was actually deleted
       const { data: deleted, error } = await client
         .from("products")
         .delete()
@@ -153,22 +177,19 @@
       }
 
       if (!deleted || deleted.length === 0) {
-        // 0 rows deleted — RLS blocked it silently (MFA policy still active on server)
-        console.error("Delete returned 0 rows — RLS blocked the operation. Apply the migration SQL in Supabase SQL Editor.");
+        console.error("Delete returned 0 rows — RLS blocked the operation.");
         return notice(
           "Delete was blocked by database security policy. Please run the migration SQL in your Supabase SQL Editor to fix this permanently.",
           true
         );
       }
 
-      // Purge any cached wishlist entries for this product
       try {
         const wishlist = JSON.parse(localStorage.getItem("vinverth_wishlist") || "[]");
         const updated = wishlist.filter((id) => id !== productId);
         localStorage.setItem("vinverth_wishlist", JSON.stringify(updated));
       } catch { /* ignore */ }
 
-      // Full re-fetch from Supabase — ensures no stale local state
       await refreshAll();
       notice("Product deleted successfully.");
     } catch (err) {
@@ -177,11 +198,11 @@
     }
   }
 
-  async function importFallback() { if (!confirm("Import the current products.js catalogue into Supabase?")) return; const fallback = window.VinverthProducts?.products || []; if (!fallback.length) return notice("Fallback catalogue was not found.", true); const names = [...new Set(fallback.map((p) => p.category))]; for (const name of names) await client.from("product_categories").upsert({ name, slug: slugify(name), is_active: true }, { onConflict: "slug" }); const { data: categories } = await client.from("product_categories").select("id,name"); const categoryMap = Object.fromEntries((categories || []).map((c) => [c.name, c.id])); for (const item of fallback) { const slug = slugify(item.name + "-" + item.id); const { data: product, error } = await client.from("products").upsert({ sku: item.id, slug, name: item.name, category_id: categoryMap[item.category], gender: item.gender, price: item.price, compare_at_price: item.oldPrice, status: "published", stock_quantity: item.stock === "Low stock" ? 2 : 20, badge: item.badge || "", description: item.description || "", uv: item.uv || "", material: item.material || "", size: item.size || "", is_featured: fallback.indexOf(item) < 12 }, { onConflict: "sku" }).select().single(); if (error) return notice(error.message, true); await client.from("product_images").update({ is_primary: false }).eq("product_id", product.id); const { data: existingImage } = await client.from("product_images").select("id").eq("product_id", product.id).eq("external_url", item.image).maybeSingle(); if (existingImage) await client.from("product_images").update({ alt_text: item.name, is_primary: true }).eq("id", existingImage.id); else await client.from("product_images").insert({ product_id: product.id, external_url: item.image, alt_text: item.name, is_primary: true }); await client.from("product_aliases").upsert([{ alias: item.id, product_id: product.id }, { alias: item.name, product_id: product.id }]); } notice("Fallback catalogue imported."); refreshAll(); }
+  async function importFallback() { if (!confirm("Import the current products.js catalogue into Supabase?")) return; const fallback = window.VinverthProducts?.products || []; if (!fallback.length) return notice("Fallback catalogue was not found.", true); const names = [...new Set(fallback.map((p) => p.category))]; for (const name of names) await client.from("product_categories").upsert({ name, slug: slugify(name), is_active: true }, { onConflict: "slug" }); const { data: categories } = await client.from("product_categories").select("id,name"); const categoryMap = Object.fromEntries((categories || []).map((c) => [c.name, c.id])); for (const item of fallback) { const slug = slugify(item.name + "-" + item.id); const { data: product, error } = await client.from("products").upsert({ sku: item.id, slug, name: item.name, category_id: categoryMap[item.category], gender: item.gender, price: item.price, compare_at_price: item.oldPrice, status: "published", stock_quantity: item.stock === "Low stock" ? 2 : 20, badge: item.badge || "", description: item.description || "", uv: item.uv || "", material: item.material || "", size: item.size || "", is_featured: fallback.indexOf(item) < 12 }, { onConflict: "sku" }).select().single(); if (error) return notice(error.message, true); await client.from("product_images").update({ is_primary: false }).eq("product_id", product.id); const { data: existingImage } = await client.from("product_images").select("id").eq("product_id", product.id).eq("external_url", item.image).maybeSingle(); if (existingImage) await client.from("product_images").update({ alt_text: item.name, is_primary: true }).eq("id", existingImage.id); else await client.from("product_images").insert({ product_id: product.id, external_url: item.image, storage_path: null, alt_text: item.name, is_primary: true }); await client.from("product_aliases").upsert([{ alias: item.id, product_id: product.id }, { alias: item.name, product_id: product.id }]); } notice("Fallback catalogue imported."); refreshAll(); }
 
   document.addEventListener("submit", async (event) => { if (event.target.matches("[data-login-form]")) { event.preventDefault(); const d = new FormData(event.target); const { error } = await client.auth.signInWithPassword({ email: d.get("email"), password: d.get("password") }); if (error) $("[data-login-message]").textContent = error.message; else gate(); } if (event.target.matches("[data-product-form]")) saveProduct(event); if (event.target.matches("[data-category-form]")) { event.preventDefault(); const d = new FormData(event.target); const { error } = await client.from("product_categories").insert({ name: d.get("name"), slug: d.get("slug") }); if (error) notice(error.message, true); else { event.target.reset(); refreshAll(); } } if (event.target.matches("[data-settings-form]")) { event.preventDefault(); const d = Object.fromEntries(new FormData(event.target)); const { error } = await client.from("site_settings").update(d).eq("id", 1); notice(error ? error.message : "Settings saved.", !!error); if (!error) refreshAll(); } });
 
-  document.addEventListener("click", async (event) => { const tab = event.target.closest("[data-tab]"); if (tab) { document.querySelectorAll("[data-tab]").forEach((b) => b.classList.toggle("is-active", b === tab)); document.querySelectorAll("[data-panel]").forEach((p) => p.hidden = p.dataset.panel !== tab.dataset.tab); } if (event.target.matches("[data-sign-out]")) { await client.auth.signOut(); show("login"); } if (event.target.matches("[data-import-catalogue]")) importFallback(); if (event.target.matches("[data-new-product]")) { const form = $("[data-product-form]"); form.innerHTML = productForm(); form.hidden = false; } const edit = event.target.closest("[data-edit-product]"); if (edit) { const form = $("[data-product-form]"); form.innerHTML = productForm(state.products.find((p) => p.id === edit.dataset.editProduct)); form.hidden = false; } if (event.target.matches("[data-cancel-product]")) $("[data-product-form]").hidden = true; const archive = event.target.closest("[data-archive-product]"); if (archive) { const { error } = await client.from("products").update({ status: "archived" }).eq("id", archive.dataset.archiveProduct); if (error) notice(error.message, true); else { notice("Product archived."); refreshAll(); } } const remove = event.target.closest("[data-delete-product]"); if (remove) { await deleteProduct(remove.dataset.deleteProduct); } const category = event.target.closest("[data-toggle-category]"); if (category) { const item = state.categories.find((p) => p.id === category.dataset.toggleCategory); const { error } = await client.from("product_categories").update({ is_active: !item.is_active }).eq("id", item.id); if (error) notice(error.message, true); else refreshAll(); } });
+  document.addEventListener("click", async (event) => { const tab = event.target.closest("[data-tab]"); if (tab) { document.querySelectorAll("[data-tab]").forEach((b) => b.classList.toggle("is-active", b === tab)); document.querySelectorAll("[data-panel]").forEach((p) => p.hidden = p.dataset.panel !== tab.dataset.tab); } if (event.target.matches("[data-sign-out]")) { await client.auth.signOut(); show("login"); } if (event.target.matches("[data-import-catalogue]")) importFallback(); if (event.target.matches("[data-new-product]")) { const form = $("[data-product-form]"); form.innerHTML = productForm(); form.hidden = false; } const edit = event.target.closest("[data-edit-product]"); if (edit) { const form = $("[data-product-form]"); form.innerHTML = productForm(state.products.find((p) => p.id === edit.dataset.editProduct)); form.hidden = false; } if (event.target.matches("[data-cancel-product]")) $("[data-product-form]").hidden = true; const archive = event.target.closest("[data-archive-product]"); if (archive) { const { error } = await client.from("products").update({ status: "archived" }).eq("id", archive.dataset.archiveProduct); if (error) notice(error.message, true); else { notice("Product archived."); refreshAll(); } } const remove = event.target.closest("[data-delete-product]"); if (remove) { await deleteProduct(remove.dataset.deleteProduct); } const category = event.target.closest("[data-toggle-category]"); if (category) { const item = state.categories.find((p) => p.id === category.dataset.toggleCategory); const { error } = await client.product_categories.update({ is_active: !item.is_active }).eq("id", item.id); if (error) notice(error.message, true); else refreshAll(); } });
 
   document.addEventListener("change", async (event) => { if (event.target.matches("[name='image_source']")) { const form = event.target.form; const useUrl = event.target.value === "url"; const urlField = $("[data-image-url]", form); const fileField = $("[data-image-file]", form); urlField.hidden = !useUrl; fileField.hidden = useUrl; $("[name='external_url']", form).disabled = !useUrl; $("[name='image_file']", form).disabled = useUrl; } if (event.target.matches("[data-message-status]")) { await client.from("contact_messages").update({ status: event.target.value }).eq("id", event.target.dataset.messageStatus); refreshAll(); } if (event.target.matches("[data-subscriber-status]")) { await client.from("newsletter_subscribers").update({ status: event.target.value }).eq("id", event.target.dataset.subscriberStatus); refreshAll(); } });
 
