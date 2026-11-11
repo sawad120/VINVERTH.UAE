@@ -2,11 +2,12 @@
   "name": "vinverth-eyewear",
   "version": "1.0.0",
   "private": true,
-  "description": "Premium VINVERTH eyewear storefront",
+  "description": "VINVERTH static eyewear storefront",
   "scripts": {
-    "start": "npx serve ."
+    "build": "node scripts/build-static.mjs",
+    "start": "node scripts/serve-static.mjs"
   },
-  "dependencies": {
-    "@emailjs/browser": "^4.4.1"
+  "devDependencies": {
+    "jsdom": "^29.1.1"
   }
 }

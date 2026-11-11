@@ -10,7 +10,7 @@
     whatsappNumber: "971565741398",
     contactEmail: "kok.intl.llc@gmail.com",
     instagramUrl: "https://www.instagram.com/vinverth.uae?igsh=OXhkaWZmZTRybDNp",
-    logoUrl: "https://res.cloudinary.com/davogn4xk/image/upload/v1778060426/ChatGPT_Image_May_6__2026__03_09_10_PM-removebg-preview_vnx4vc.png",
+    logoUrl: "assets/images/ChatGPT_Image_May_6__2026__03_09_10_PM-removebg-preview_vnx4vc.png",
     wishlistKey: "vinverth-wishlist",
     emailjs: {
       serviceId: "service_kxg77na",
@@ -21,23 +21,10 @@
   };
 
   let products = [];
-  const currency = (value) => new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(value);
+  const currency = (value) => value == null || value === "" ? "Price on request" : new Intl.NumberFormat("en-AE", { style: "currency", currency: "AED", minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(value);
   const select = (selector, scope = document) => scope.querySelector(selector);
   const selectAll = (selector, scope = document) => [...scope.querySelectorAll(selector)];
   const escapeHtml = (value) => String(value).replace(/[&<>'"]/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "'": "&#39;", '"': "&quot;" }[character]));
-
-  async function hydrateStorefrontData() {
-    const api = window.VinverthCatalogueApi;
-    if (!api) return;
-    const [remoteProducts, settings] = await Promise.all([api.loadProducts(), api.loadSettings()]);
-    products = Array.isArray(remoteProducts) ? remoteProducts : [];
-    if (settings) {
-      CONFIG.whatsappNumber = settings.whatsapp_number || CONFIG.whatsappNumber;
-      CONFIG.contactEmail = settings.support_email || CONFIG.contactEmail;
-      CONFIG.instagramUrl = settings.instagram_url || CONFIG.instagramUrl;
-      CONFIG.logoUrl = settings.logo_url || CONFIG.logoUrl;
-    }
-  }
 
   // ---------- Shared utility functions ----------
   function showToast(message) {
@@ -171,12 +158,13 @@
   function renderCart() {
     const cart = getCart();
     const totalItems = cart.reduce((total, item) => total + item.quantity, 0);
-    const totalPrice = cart.reduce((total, item) => {
-      const product = getProduct(item.id);
-      return total + (product ? product.price * item.quantity : 0);
+    const cartProducts = cart.map((item) => ({ item, product: getProduct(item.id) })).filter(({ product }) => product);
+    const hasUnpricedItems = cartProducts.some(({ product }) => product.price == null);
+    const totalPrice = cartProducts.reduce((total, { item, product }) => {
+      return total + (product.price == null ? 0 : product.price * item.quantity);
     }, 0);
     selectAll(".cart-count").forEach((badge) => { badge.textContent = totalItems; });
-    selectAll("[data-cart-total]").forEach((total) => { total.textContent = currency(totalPrice); });
+    selectAll("[data-cart-total]").forEach((total) => { total.textContent = hasUnpricedItems ? "Price on request" : currency(totalPrice); });
     const itemsContainer = select("[data-cart-items]");
     if (!itemsContainer) return;
     if (!cart.length) {
@@ -210,7 +198,7 @@
       lines.push(`Product: ${product.name}`);
       lines.push(`Product ID: ${product.id}`);
       lines.push(`Category: ${product.category}`);
-      lines.push(`Price: ${currency(product.price)}`);
+      if (product.price != null) lines.push(`Price: ${currency(product.price)}`);
       lines.push(`Quantity: ${item.quantity}`);
       lines.push(`Image: ${product.image}`);
       lines.push(`Product page: ${window.location.origin}/product.html?id=${product.id}`);
@@ -410,16 +398,19 @@
         const index = siblings.indexOf(element);
         if (index >= 0) element.style.setProperty("--reveal-index", String(index));
       }
-      observer?.observe(element);
+      if (observer) observer.observe(element);
+      else element.classList.add("is-visible");
     };
     const scan = (root = document) => revealSelectors.forEach((selector) => selectAll(selector, root).forEach(reveal));
-    observer = new IntersectionObserver((entries, currentObserver) => {
-      entries.forEach((entry) => {
-        if (!entry.isIntersecting) return;
-        entry.target.classList.add("is-visible");
-        currentObserver.unobserve(entry.target);
-      });
-    }, { threshold: 0.08, rootMargin: "0px 0px -40px" });
+    if (typeof IntersectionObserver !== "undefined") {
+      observer = new IntersectionObserver((entries, currentObserver) => {
+        entries.forEach((entry) => {
+          if (!entry.isIntersecting) return;
+          entry.target.classList.add("is-visible");
+          currentObserver.unobserve(entry.target);
+        });
+      }, { threshold: 0.08, rootMargin: "0px 0px -40px" });
+    }
     scan();
     const mutationObserver = new MutationObserver(() => scan());
     mutationObserver.observe(document.body, { childList: true, subtree: true });
@@ -587,9 +578,6 @@
     let requestedId = (params.get("id") || params.get("slug") || params.get("sku") || params.get("product") || params.get("name") || "").trim();
     if (!requestedId) {
       let availableProducts = products;
-      if (!availableProducts.length && window.VinverthCatalogueApi?.loadProducts) {
-        availableProducts = await window.VinverthCatalogueApi.loadProducts();
-      }
       if (availableProducts.length > 0) {
         requestedId = availableProducts[0].id;
       }
@@ -599,12 +587,6 @@
       return;
     }
     let product = getProduct(requestedId);
-    if (!product && window.VinverthCatalogueApi?.loadProductById) {
-      product = await window.VinverthCatalogueApi.loadProductById(requestedId);
-      if (product && !products.some((p) => p.id === product.id)) {
-        products.push(product);
-      }
-    }
     if (!product) {
       renderEmptyProductState(container);
       return;
@@ -658,16 +640,21 @@
         const templateParams = type === "contact"
           ? {
               full_name: select("#fullName", form)?.value.trim() || "",
-              email: select("#email", form)?.value.trim() || "",
+              email: select("#email", form)?.value.trim().toLowerCase() || "",
               inquiry: select("#inquiry", form)?.value.trim() || ""
             }
-          : { email: select("#newsletter-email", form)?.value.trim() || "" };
+          : { email: select("#newsletter-email", form)?.value.trim().toLowerCase() || "" };
         await sendEmail(templateParams);
         form.reset();
-        if (message) message.textContent = type === "newsletter" ? "You're on the list. Welcome in." : "Message sent. We will get back to you soon.";
+        if (message) message.textContent = type === "newsletter"
+          ? "You're on the list. Welcome in."
+          : "Message sent. We will get back to you soon.";
         showMailPopup(type === "newsletter" ? "You're on the list." : "Message sent successfully.");
-      } catch {
-        if (message) message.textContent = "Could not connect right now. Please WhatsApp us instead.";
+      } catch (error) {
+        console.error(`${type} form submission failed:`, error);
+        if (message) message.textContent = type === "newsletter"
+          ? "Could not add your email. Please try again."
+          : "Could not send your message. Please WhatsApp us instead.";
       } finally {
         submit.disabled = false;
       }
@@ -705,7 +692,9 @@
 
   // ---------- Boot ----------
   document.addEventListener("DOMContentLoaded", async () => {
-    await hydrateStorefrontData();
+    products = Array.isArray(window.VinverthProducts?.products)
+      ? window.VinverthProducts.products
+      : [];
     initBranding();
     initContactEmail();
     initFooterSocials();

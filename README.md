@@ -1,31 +1,55 @@
 # VINVERTH Eyewear
 
-Premium, responsive static storefront built with HTML, CSS, and vanilla JavaScript.
+VINVERTH is a static, multi-page storefront built with HTML, CSS, and vanilla JavaScript. Pages, styles, scripts, catalogue data, and images are served directly from this project. There is no admin panel, authentication, database, or backend runtime.
 
 ## Run locally
 
-```bash
-npm install
+```sh
 npm start
 ```
 
-Then open the local URL shown by `serve` and start from `index.html`.
+Open the local address printed by the server. To create a deployment-ready static output, run:
 
-## Before launch
+```sh
+npm run build
+```
 
-1. The WhatsApp number is configured as `+971 56 574 1398` in `script.js`; update `whatsappNumber` there if the business number changes.
-2. Confirm the EmailJS service/template configuration in `script.js` and ensure the template accepts the parameter names used in the code: for the contact form use `full_name`, `email`, and `inquiry`; for the newsletter form use `email`.
-3. A normal `wa.me` link sends the product image URL inside the message. It cannot attach an image file automatically; actual image attachments require a backend and WhatsApp Cloud API.
-4. Replace the relative canonical/production URLs in your deployment configuration once the GitHub Pages domain is known.
+The build copies the public pages and their local assets into `dist/`. Vercel is configured to build this directory.
 
-## Pages
+## Update the catalogue and images
 
-- `index.html` — animated homepage, hero carousel, featured 12 products, story, reviews, newsletter
-- `shop.html` — searchable/filterable catalogue with exactly 100 products
-- `product.html` — product detail page selected by `?id=VN-1091`
-- `about.html` — VINVERTH story and values
-- `contact.html` — contact form with EmailJS
-- `policies.html` — privacy, terms, shipping, and return policies
-- `wishlist.html` — saved frames stored in browser `localStorage`
+1. Add or replace image files in `assets/images/`.
+2. Add product objects to the `products` array in `products.js` and set `image` to a project-relative path, such as `assets/images/amber-frame.jpg`.
 
-Product data lives in `products.js`. Cart contents persist in browser `localStorage`.
+Each product uses this shape:
+
+```js
+{
+  id: "frame-001",
+  name: "Frame name",
+  category: "Sunglasses",
+  gender: "Unisex",
+  image: "assets/images/frame-001.jpg",
+  price: 120,
+  oldPrice: null,
+  badge: "",
+  isFeatured: true,
+  description: "Product description.",
+  material: "Acetate",
+  uv: "UV400",
+  size: "Medium",
+  stock: "In stock"
+}
+```
+
+Cart, wishlist, filters, product details, and WhatsApp checkout use this local catalogue. Contact and newsletter forms send through the existing EmailJS service; they do not write to a database. Update its service/template settings in `script.js` if the email service changes.
+
+## Public pages
+
+- `index.html` — homepage and collection sections
+- `shop.html` — searchable and filterable catalogue
+- `product.html` — product details
+- `about.html` — company story
+- `contact.html` — contact form and support information
+- `policies.html` — privacy, terms, shipping, and returns
+- `wishlist.html` — saved frames in browser storage
