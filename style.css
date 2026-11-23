@@ -4667,3 +4667,159 @@ textarea,
 .product-card:hover .product-card__image img {
   transform: none;
 }
+
+/* The supplied campaign art already includes its headline and CTA. */
+#home.hero {
+  height: auto;
+  min-height: 0;
+  aspect-ratio: 1024 / 434;
+  background: #e8ddca;
+}
+
+#home .hero__slides,
+#home .hero-slide {
+  height: 100%;
+  min-height: 0;
+}
+
+#home .hero-slide__copy,
+#home .hero__numbers,
+#home .scroll-cue {
+  display: none;
+}
+
+#home .hero-slide__image--premium {
+  position: absolute;
+  inset: 0;
+  margin: 0;
+  overflow: hidden;
+  isolation: isolate;
+  background: #e8ddca;
+}
+
+#home .hero-slide__image--premium img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center;
+  transform: none;
+}
+
+#home .hero-slide.is-active .hero-slide__image--premium img {
+  animation: hero-banner-image-in 700ms ease-out both;
+}
+
+#home .hero-slide__image--premium::before,
+#home .hero-slide__image--premium::after {
+  position: absolute;
+  inset: -18%;
+  z-index: 1;
+  border-radius: 50%;
+  content: "";
+  filter: blur(28px);
+  opacity: 0;
+  pointer-events: none;
+  mix-blend-mode: screen;
+}
+
+#home .hero-slide__image--premium::before {
+  background:
+    radial-gradient(ellipse at 18% 76%, rgba(255, 250, 239, .38), transparent 34%),
+    radial-gradient(ellipse at 47% 82%, rgba(255, 255, 255, .25), transparent 30%),
+    radial-gradient(ellipse at 79% 72%, rgba(255, 248, 233, .3), transparent 36%);
+}
+
+#home .hero-slide__image--premium::after {
+  background:
+    radial-gradient(ellipse at 30% 62%, rgba(255, 255, 255, .2), transparent 32%),
+    radial-gradient(ellipse at 68% 79%, rgba(245, 237, 224, .34), transparent 38%);
+}
+
+#home .hero-slide.is-active .hero-slide__image--premium::before {
+  opacity: .42;
+  animation: hero-smoke-drift 14s ease-in-out infinite alternate;
+}
+
+#home .hero-slide.is-active .hero-slide__image--premium::after {
+  opacity: .28;
+  animation: hero-smoke-drift-reverse 18s ease-in-out infinite alternate;
+}
+
+.hero-banner-link {
+  position: absolute;
+  top: 58%;
+  right: 13%;
+  z-index: 2;
+  width: 24%;
+  height: 11%;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.hero-banner-link:hover {
+  background: rgba(255, 255, 255, .06);
+}
+
+.hero-banner-link:focus-visible {
+  outline: 2px solid #fff;
+  outline-offset: 2px;
+}
+
+#home .hero__controls {
+  right: auto;
+  bottom: 5%;
+  left: 3%;
+  z-index: 3;
+}
+
+@keyframes hero-banner-image-in {
+  from { opacity: .88; }
+  to { opacity: 1; }
+}
+
+@keyframes hero-smoke-drift {
+  from { transform: translate3d(-2%, 1%, 0) scale(1); }
+  to { transform: translate3d(2%, -1%, 0) scale(1.08); }
+}
+
+@keyframes hero-smoke-drift-reverse {
+  from { transform: translate3d(2%, -1%, 0) scale(1.08); }
+  to { transform: translate3d(-2%, 1%, 0) scale(1); }
+}
+
+@media (max-width: 820px) {
+  #home.hero {
+    height: auto;
+    min-height: 0;
+    aspect-ratio: 2.05 / 1;
+  }
+
+  #home .hero__slides {
+    height: 100%;
+    min-height: 0;
+  }
+
+  #home .hero-slide__image--premium img {
+    object-fit: contain;
+  }
+
+  .hero-banner-link {
+    top: 57%;
+    right: 12%;
+    width: 26%;
+    height: 13%;
+  }
+
+  #home .hero__controls {
+    bottom: 4%;
+    left: 2%;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #home .hero-slide.is-active .hero-slide__image--premium img,
+  #home .hero-slide.is-active .hero-slide__image--premium::before,
+  #home .hero-slide.is-active .hero-slide__image--premium::after {
+    animation: none;
+  }
+}
