@@ -21,7 +21,7 @@
   };
 
   let products = [];
-  const currency = (value, currencyCode = "USD") => value == null || value === "" ? "Price on request" : new Intl.NumberFormat("en-AE", { style: "currency", currency: currencyCode || "USD", minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(value);
+  const currency = (value, currencyCode = "USD") => value == null || value === "" ? "Price on request" : new Intl.NumberFormat("en-US", { style: "currency", currency: currencyCode || "USD", minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(value);
   const select = (selector, scope = document) => scope.querySelector(selector);
   const selectAll = (selector, scope = document) => [...scope.querySelectorAll(selector)];
   const escapeHtml = (value) => String(value).replace(/[&<>'"]/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "'": "&#39;", '"': "&quot;" }[character]));
