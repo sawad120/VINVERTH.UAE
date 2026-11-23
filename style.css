@@ -4736,13 +4736,13 @@ textarea,
 }
 
 #home .hero-slide.is-active .hero-slide__image--premium::before {
-  opacity: .42;
-  animation: hero-smoke-drift 14s ease-in-out infinite alternate;
+  opacity: .16;
+  animation: hero-smoke-drift 22s ease-in-out infinite alternate;
 }
 
 #home .hero-slide.is-active .hero-slide__image--premium::after {
-  opacity: .28;
-  animation: hero-smoke-drift-reverse 18s ease-in-out infinite alternate;
+  opacity: .08;
+  animation: hero-smoke-drift-reverse 28s ease-in-out infinite alternate;
 }
 
 .hero-banner-link {
