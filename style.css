@@ -4656,3 +4656,14 @@ textarea,
     transform: none;
   }
 }
+
+/* Keep full eyewear visible in catalog cards and detail views. */
+.product-card__image img,
+.product-detail__media img {
+  object-fit: contain;
+  background-color: #f6f1e7;
+}
+
+.product-card:hover .product-card__image img {
+  transform: none;
+}

@@ -1002,5 +1002,47 @@ window.VinverthProducts = { products: [
     "isFeatured": false,
     "stockQuantity": 0,
     "description": "Fine metal round eyeglasses with wood-tone accents on the temples."
+  },
+  {
+    "id": "VN-205",
+    "name": "VN-205",
+    "category": "Sunglasses",
+    "gender": "Unisex",
+    "image": "assets/images/recovered-products/VN-205.jpg",
+    "price": 129,
+    "currency": "USD",
+    "oldPrice": null,
+    "badge": null,
+    "isFeatured": false,
+    "stockQuantity": 0,
+    "description": "Clear square sunglasses with purple-to-amber gradient lenses."
+  },
+  {
+    "id": "VN-206",
+    "name": "VN-206",
+    "category": "Optical",
+    "gender": "Unisex",
+    "image": "assets/images/recovered-products/VN-206.jpg",
+    "price": 126,
+    "currency": "USD",
+    "oldPrice": null,
+    "badge": null,
+    "isFeatured": false,
+    "stockQuantity": 0,
+    "description": "Fine metal eyeglasses with a softly squared clear frame and warm temple accents."
+  },
+  {
+    "id": "VN-207",
+    "name": "VN-207",
+    "category": "Sunglasses",
+    "gender": "Unisex",
+    "image": "assets/images/recovered-products/VN-207.jpg",
+    "price": 128,
+    "currency": "USD",
+    "oldPrice": null,
+    "badge": null,
+    "isFeatured": false,
+    "stockQuantity": 0,
+    "description": "Bold black square sunglasses with bright yellow lenses."
   }
 ] };
