@@ -21,7 +21,7 @@
   };
 
   let products = [];
-  const currency = (value) => value == null || value === "" ? "Price on request" : new Intl.NumberFormat("en-AE", { style: "currency", currency: "AED", minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(value);
+  const currency = (value, currencyCode = "USD") => value == null || value === "" ? "Price on request" : new Intl.NumberFormat("en-AE", { style: "currency", currency: currencyCode || "USD", minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(value);
   const select = (selector, scope = document) => scope.querySelector(selector);
   const selectAll = (selector, scope = document) => [...scope.querySelectorAll(selector)];
   const escapeHtml = (value) => String(value).replace(/[&<>'"]/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "'": "&#39;", '"': "&quot;" }[character]));
@@ -164,7 +164,7 @@
       return total + (product.price == null ? 0 : product.price * item.quantity);
     }, 0);
     selectAll(".cart-count").forEach((badge) => { badge.textContent = totalItems; });
-    selectAll("[data-cart-total]").forEach((total) => { total.textContent = hasUnpricedItems ? "Price on request" : currency(totalPrice); });
+    selectAll("[data-cart-total]").forEach((total) => { total.textContent = hasUnpricedItems ? "Price on request" : currency(totalPrice, cartProducts[0]?.product.currency || "USD"); });
     const itemsContainer = select("[data-cart-items]");
     if (!itemsContainer) return;
     if (!cart.length) {
@@ -174,7 +174,7 @@
     itemsContainer.innerHTML = cart.map((item) => {
       const product = getProduct(item.id);
       if (!product) return "";
-      return `<article class="cart-item"><img src="${escapeHtml(product.image)}" alt="${escapeHtml(product.name)}" loading="lazy" decoding="async" /><div><h3>${escapeHtml(product.name)}</h3><p>${currency(product.price)}</p><div class="cart-item__qty"><button type="button" data-cart-decrease="${product.id}" aria-label="Decrease quantity">−</button><span>${item.quantity}</span><button type="button" data-cart-increase="${product.id}" aria-label="Increase quantity">+</button></div></div><button class="cart-item__remove" type="button" data-cart-remove="${product.id}" aria-label="Remove ${escapeHtml(product.name)}">×</button></article>`;
+      return `<article class="cart-item"><img src="${escapeHtml(product.image)}" alt="${escapeHtml(product.name)}" loading="lazy" decoding="async" /><div><h3>${escapeHtml(product.name)}</h3><p>${currency(product.price, product.currency)}</p><div class="cart-item__qty"><button type="button" data-cart-decrease="${product.id}" aria-label="Decrease quantity">−</button><span>${item.quantity}</span><button type="button" data-cart-increase="${product.id}" aria-label="Increase quantity">+</button></div></div><button class="cart-item__remove" type="button" data-cart-remove="${product.id}" aria-label="Remove ${escapeHtml(product.name)}">×</button></article>`;
     }).join("");
   }
 
@@ -198,7 +198,7 @@
       lines.push(`Product: ${product.name}`);
       lines.push(`Product ID: ${product.id}`);
       lines.push(`Category: ${product.category}`);
-      if (product.price != null) lines.push(`Price: ${currency(product.price)}`);
+      if (product.price != null) lines.push(`Price: ${currency(product.price, product.currency)}`);
       lines.push(`Quantity: ${item.quantity}`);
       lines.push(`Image: ${product.image}`);
       lines.push(`Product page: ${window.location.origin}/product.html?id=${product.id}`);
@@ -482,7 +482,7 @@
       ? `<button class="button is-added" disabled aria-pressed="true">Added <span>✓</span></button>`
       : `<button class="button button--dark" type="button" data-add-to-cart="${escapeHtml(product.id)}">Add to bag <span>+</span></button>`;
     const linkParam = encodeURIComponent(product.id || product.slug || product.sku || product.rawId);
-    return `<article class="product-card"><a class="product-card__image" href="product.html?id=${linkParam}"><img src="${escapeHtml(product.image)}" alt="${escapeHtml(product.name)}" loading="lazy" decoding="async" /><span class="product-card__badge" ${product.badge ? "" : "hidden"}>${escapeHtml(product.badge)}</span></a><button class="product-card__wish${isWishlisted ? " is-wishlisted" : ""}" type="button" data-wishlist="${escapeHtml(product.id)}" aria-label="${isWishlisted ? "Remove" : "Add"} ${escapeHtml(product.name)} ${isWishlisted ? "from" : "to"} wishlist"><span class="heart-icon" aria-hidden="true">${isWishlisted ? "♥" : "♡"}</span></button><div class="product-card__body"><a href="product.html?id=${linkParam}"><h3>${escapeHtml(product.name)}</h3></a><p>${escapeHtml(product.category)} · ${escapeHtml(product.gender)}</p><div class="product-card__price"><span>${currency(product.price)}</span>${product.oldPrice ? `<del class="product-card__old">${currency(product.oldPrice)}</del>` : ""}</div><div class="product-card__actions">${addButton}<button class="button button--outline" type="button" data-buy-now="${escapeHtml(product.id)}">Buy <span>→</span></button></div></div></article>`;
+    return `<article class="product-card"><a class="product-card__image" href="product.html?id=${linkParam}"><img src="${escapeHtml(product.image)}" alt="${escapeHtml(product.name)}" loading="lazy" decoding="async" /><span class="product-card__badge" ${product.badge ? "" : "hidden"}>${escapeHtml(product.badge)}</span></a><button class="product-card__wish${isWishlisted ? " is-wishlisted" : ""}" type="button" data-wishlist="${escapeHtml(product.id)}" aria-label="${isWishlisted ? "Remove" : "Add"} ${escapeHtml(product.name)} ${isWishlisted ? "from" : "to"} wishlist"><span class="heart-icon" aria-hidden="true">${isWishlisted ? "♥" : "♡"}</span></button><div class="product-card__body"><a href="product.html?id=${linkParam}"><h3>${escapeHtml(product.name)}</h3></a><p>${escapeHtml(product.category)} · ${escapeHtml(product.gender)}</p><div class="product-card__price"><span>${currency(product.price, product.currency)}</span>${product.oldPrice ? `<del class="product-card__old">${currency(product.oldPrice, product.currency)}</del>` : ""}</div><div class="product-card__actions">${addButton}<button class="button button--outline" type="button" data-buy-now="${escapeHtml(product.id)}">Buy <span>→</span></button></div></div></article>`;
   }
 
   function renderProducts(container, collection) {
@@ -608,7 +608,7 @@
           ${product.stock ? `<div><strong>Availability</strong><span>${escapeHtml(product.stock)}</span></div>` : ""}
         </div>`
       : "";
-    container.innerHTML = `<div class="product-detail__media"><img src="${escapeHtml(product.image)}" alt="${escapeHtml(product.name)}" loading="eager" decoding="async" /></div><div class="product-detail__content"><p class="eyebrow">${escapeHtml(product.category)} · ${escapeHtml(product.gender)}</p><h1>${escapeHtml(product.name)}</h1><div class="product-detail__price"><span>${currency(product.price)}</span>${product.oldPrice ? `<del>${currency(product.oldPrice)}</del>` : ""}</div><p class="product-detail__description">${escapeHtml(product.description)}</p>${specsHtml}<div class="product-detail__buttons"><div class="quantity"><button type="button" data-qty="decrease" aria-label="Decrease quantity">−</button><input value="1" min="1" max="10" type="number" data-detail-quantity aria-label="Quantity" /><button type="button" data-qty="increase" aria-label="Increase quantity">+</button></div>${detailAdd}<button class="button button--blue" type="button" data-detail-buy="${escapeHtml(product.id)}">Buy on WhatsApp <span>→</span></button></div></div>`;
+    container.innerHTML = `<div class="product-detail__media"><img src="${escapeHtml(product.image)}" alt="${escapeHtml(product.name)}" loading="eager" decoding="async" /></div><div class="product-detail__content"><p class="eyebrow">${escapeHtml(product.category)} · ${escapeHtml(product.gender)}</p><h1>${escapeHtml(product.name)}</h1><div class="product-detail__price"><span>${currency(product.price, product.currency)}</span>${product.oldPrice ? `<del>${currency(product.oldPrice, product.currency)}</del>` : ""}</div><p class="product-detail__description">${escapeHtml(product.description)}</p>${specsHtml}<div class="product-detail__buttons"><div class="quantity"><button type="button" data-qty="decrease" aria-label="Decrease quantity">−</button><input value="1" min="1" max="10" type="number" data-detail-quantity aria-label="Quantity" /><button type="button" data-qty="increase" aria-label="Increase quantity">+</button></div>${detailAdd}<button class="button button--blue" type="button" data-detail-buy="${escapeHtml(product.id)}">Buy on WhatsApp <span>→</span></button></div></div>`;
     const relatedContainer = select("#related-products");
     if (relatedContainer) {
       const related = products.filter((item) => item.id !== product.id && item.category === product.category).slice(0, 4);
